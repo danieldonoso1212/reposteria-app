@@ -13,7 +13,7 @@ import { Clientes } from './pages/Clientes'
 
 function App() {
   // basename para que las rutas funcionen en GitHub Pages
-  const basename = import.meta.env.PROD ? '/reposteria-app' : ''
+ const basename = '/reposteria-app'
 
   return (
     <AuthProvider>
