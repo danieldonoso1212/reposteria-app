@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Heart } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { formatCOP } from '../lib/utils'
+import { formatCOP, enviarWhatsAppACallMeBot } from '../lib/utils'
 import { Receta, Extra } from '../types/database'
 
 export function FormularioPublico() {
@@ -44,7 +44,9 @@ export function FormularioPublico() {
       ])
 
       const r = recRes.data ?? []
-      const e = (extRes.data ?? []) as unknown as (Extra & { material: { unidad_medida: string } })[]
+      const e = (extRes.data ?? []) as unknown as (Extra & {
+        material: { unidad_medida: string }
+      })[]
       setRecetas(r)
       setExtras(e)
       if (r.length > 0) {
@@ -79,7 +81,6 @@ export function FormularioPublico() {
     setEnviando(true)
 
     try {
-      // 1. Crear/buscar cliente
       const { data: clienteExistente } = await supabase
         .from('clientes')
         .select('id')
@@ -101,7 +102,6 @@ export function FormularioPublico() {
         clienteId = nuevoCliente.id
       }
 
-      // 2. Crear pedido
       const { error: errPedido } = await supabase.from('pedidos').insert({
         cliente_id: clienteId,
         receta_id: form.recetaId,
@@ -118,6 +118,32 @@ export function FormularioPublico() {
       })
 
       if (errPedido) throw errPedido
+
+      // ====================================================
+      // NOTIFICACIÓN AUTOMÁTICA POR WHATSAPP AL ADMIN
+      // ====================================================
+      const extrasNombres = extras
+        .filter((ex) => form.extrasIds.includes(ex.id))
+        .map((ex) => ex.nombre)
+        .join(', ')
+
+      const mensaje =
+        `🎂 *NUEVO PEDIDO - Dulzuras JM*%0A%0A` +
+        `*Cliente:* ${form.nombre}%0A` +
+        `*WhatsApp:* ${form.whatsapp}%0A` +
+        (form.dependencia ? `*Dependencia:* ${form.dependencia}%0A` : '') +
+        `*Producto:* ${recetaSel?.nombre ?? ''}%0A` +
+        (extrasNombres ? `*Extras:* ${extrasNombres}%0A` : '') +
+        `*Fecha entrega:* ${form.fechaEntrega}%0A` +
+        `*Precio estimado:* ${formatCOP(precioTotal)}%0A` +
+        (form.notas ? `*Notas:* ${form.notas}` : '')
+
+      // Convertimos %0A a saltos reales para el mensaje
+      const mensajeFinal = mensaje.replace(/%0A/g, '\n')
+      
+      // Enviar (si no está configurado, simplemente no hace nada)
+      enviarWhatsAppACallMeBot(mensajeFinal)
+
       setEnviado(true)
     } catch (err: unknown) {
       const mensaje = err instanceof Error ? err.message : 'Error al enviar el pedido'
@@ -138,7 +164,7 @@ export function FormularioPublico() {
   if (enviado) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-cream-50 to-cream-100">
-        <div className="card p-8 max-w-md w-full text-center">
+        <div className="card p-6 sm:p-8 max-w-md w-full text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
             <Heart className="text-green-600" size={32} />
           </div>
@@ -177,19 +203,20 @@ export function FormularioPublico() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cream-50 to-cream-100 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-cream-50 to-cream-100 py-6 px-4 sm:py-8">
       <div className="max-w-lg mx-auto">
-        {/* Logo y encabezado */}
         <div className="text-center mb-6">
           <img
             src="./logo.jpeg"
             alt="Dulzuras JM"
-            className="w-32 h-32 mx-auto rounded-full object-cover shadow-lg mb-4"
+            className="w-24 h-24 sm:w-32 sm:h-32 mx-auto rounded-full object-cover shadow-lg mb-4"
           />
         </div>
 
-        <div className="card p-6 md:p-8">
-          <h1 className="font-display text-3xl text-wine-800 mb-1">Pide tu torta</h1>
+        <div className="card p-5 sm:p-6 md:p-8">
+          <h1 className="font-display text-2xl sm:text-3xl text-wine-800 mb-1">
+            Pide tu torta
+          </h1>
           <p className="text-cream-600 mb-6 text-sm">
             Llena el formulario y te contactamos por WhatsApp para confirmar
           </p>
@@ -337,10 +364,7 @@ export function FormularioPublico() {
         </div>
 
         <div className="text-center mt-6">
-          <Link
-            to="/login"
-            className="text-xs text-cream-500 hover:text-cream-700"
-          >
+          <Link to="/login" className="text-xs text-cream-500 hover:text-cream-700">
             Acceso administración
           </Link>
         </div>
