@@ -6,17 +6,9 @@ import { Pedido, Extra, EstadoPedido } from '../types/database'
 
 const ESTADOS: { valor: EstadoPedido; etiqueta: string; color: string }[] = [
   { valor: 'pendiente', etiqueta: 'Pendiente', color: 'bg-amber-100 text-amber-800' },
-  {
-    valor: 'en_proceso',
-    etiqueta: 'En proceso',
-    color: 'bg-blue-100 text-blue-800',
-  },
+  { valor: 'en_proceso', etiqueta: 'En proceso', color: 'bg-blue-100 text-blue-800' },
   { valor: 'listo', etiqueta: 'Listo', color: 'bg-green-100 text-green-800' },
-  {
-    valor: 'entregado',
-    etiqueta: 'Entregado',
-    color: 'bg-cream-200 text-cream-800',
-  },
+  { valor: 'entregado', etiqueta: 'Entregado', color: 'bg-cream-200 text-cream-800' },
   { valor: 'cancelado', etiqueta: 'Cancelado', color: 'bg-red-100 text-red-800' },
 ]
 
@@ -66,9 +58,9 @@ export function Pedidos() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="font-display text-3xl text-cream-900">Pedidos</h1>
+        <h1 className="font-display text-2xl sm:text-3xl text-cream-900">Pedidos</h1>
         <p className="text-cream-600 mt-1 text-sm">
-          Pedidos que llegan del formulario público y los que registras tú
+          Pedidos del formulario público y los que registras tú
         </p>
       </div>
 
@@ -95,9 +87,9 @@ export function Pedidos() {
 
             return (
               <div key={p.id} className="card p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                  <div className="flex-1 min-w-[250px]">
-                    <div className="flex items-center gap-2 mb-1">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-display text-lg text-cream-900">
                         {p.receta?.nombre ?? 'Sin receta'}
                       </h3>
@@ -112,7 +104,7 @@ export function Pedidos() {
                       )}
                     </p>
                     {whatsapp && (
-                      <a
+                      
                         href={urlWhatsApp(whatsapp)}
                         target="_blank"
                         rel="noreferrer"
@@ -137,7 +129,7 @@ export function Pedidos() {
                     )}
                   </div>
 
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex sm:flex-col items-center sm:items-end gap-2 justify-between sm:justify-start">
                     <p className="font-display text-xl text-wine-700">
                       {formatCOP(Number(p.precio_total))}
                     </p>
@@ -162,10 +154,8 @@ export function Pedidos() {
                   </span>
                   <select
                     value={p.estado}
-                    onChange={(e) =>
-                      cambiarEstado(p.id, e.target.value as EstadoPedido)
-                    }
-                    className="text-xs px-2 py-1 border border-cream-200 rounded-lg"
+                    onChange={(e) => cambiarEstado(p.id, e.target.value as EstadoPedido)}
+                    className="text-xs px-2 py-1 border border-cream-200 rounded-lg bg-white"
                   >
                     {ESTADOS.map((e) => (
                       <option key={e.valor} value={e.valor}>
