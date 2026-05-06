@@ -239,7 +239,7 @@ export function FormularioPublico() {
               </div>
 
               <div>
-                <label className="label">WhatsApp *</label>
+                <label className="label">WhatsApp/Telefono *</label>
                 <input
                   type="tel"
                   required
@@ -251,7 +251,7 @@ export function FormularioPublico() {
               </div>
 
               <div>
-                <label className="label">Dependencia</label>
+                <label className="label">Dependencia/Direccion</label>
                 <input
                   type="text"
                   placeholder="Ej: tics, recursos humanos..."
@@ -262,7 +262,7 @@ export function FormularioPublico() {
               </div>
 
               <div>
-                <label className="label">Tipo de torta *</label>
+                <label className="label">Tipo de producto *</label>
                 <select
                   required
                   value={form.recetaId}
@@ -313,7 +313,7 @@ export function FormularioPublico() {
 
               {precioTotal > 0 && (
                 <div className="bg-wine-50 border border-wine-200 rounded-lg p-4">
-                  <p className="text-xs text-wine-700">Precio estimado</p>
+                  <p className="text-xs text-wine-700">Precio</p>
                   <p className="font-display text-3xl text-wine-800">
                     {formatCOP(precioTotal)}
                   </p>
@@ -322,9 +322,7 @@ export function FormularioPublico() {
                       Base {formatCOP(precioBase)} + extras {formatCOP(precioExtras)}
                     </p>
                   )}
-                  <p className="text-xs text-wine-600 mt-1">
-                    Te confirmamos el precio final por WhatsApp
-                  </p>
+                  
                 </div>
               )}
 
