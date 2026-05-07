@@ -301,7 +301,8 @@ export function FormularioPublico() {
               </div>
               <div>
                 <label className="label">Fecha de entrega *</label>
-                <input type="date" required value={fechaEntrega} onChange={(e) => setFechaEntrega(e.target.value)} className="input" />
+               <input type="date" required min={new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0]}
+                value={fechaEntrega}
               </div>
 
               {/* Carrito / Resumen del pedido */}
