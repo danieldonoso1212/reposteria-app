@@ -302,7 +302,7 @@ export function FormularioPublico() {
               <div>
                 <label className="label">Fecha de entrega *</label>
                <input type="date" required min={new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0]}
-                value={fechaEntrega}
+  value={fechaEntrega}
               </div>
 
               {/* Carrito / Resumen del pedido */}
