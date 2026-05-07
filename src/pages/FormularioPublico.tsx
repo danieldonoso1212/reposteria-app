@@ -292,11 +292,11 @@ export function FormularioPublico() {
                 <input type="text" required value={nombre} onChange={(e) => setNombre(e.target.value)} className="input" />
               </div>
               <div>
-                <label className="label">WhatsApp *</label>
+                <label className="label">WhatsApp/Telefono *</label>
                 <input type="tel" required placeholder="300 000 0000" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="input" />
               </div>
               <div>
-                <label className="label">Dependencia</label>
+                <label className="label">Dependencia/Direccion</label>
                 <input type="text" placeholder="Ej: tics, recursos humanos..." value={dependencia} onChange={(e) => setDependencia(e.target.value)} className="input" />
               </div>
               <div>
@@ -359,7 +359,7 @@ export function FormularioPublico() {
 
                 <div className="space-y-3">
                   <div>
-                    <label className="label text-xs">Tipo de torta</label>
+                    <label className="label text-xs">Tipo de producto</label>
                     <select
                       value={recetaSel}
                       onChange={(e) => setRecetaSel(e.target.value)}
