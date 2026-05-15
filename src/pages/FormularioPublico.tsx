@@ -13,6 +13,7 @@ interface ProductoCarrito {
   notas: string
   precioBase: number
   precioExtras: number
+  cantidad: number
 }
 
 export function FormularioPublico() {
@@ -36,6 +37,7 @@ export function FormularioPublico() {
   const [recetaSel, setRecetaSel] = useState('')
   const [extrasSel, setExtrasSel] = useState<string[]>([])
   const [notasProducto, setNotasProducto] = useState('')
+  const [cantidadProducto, setCantidadProducto] = useState(1)
 
   useEffect(() => {
     cargar()
@@ -69,13 +71,19 @@ export function FormularioPublico() {
   }
 
   const recetaActual = recetas.find((r) => r.id === recetaSel)
+  const esCupcake = recetaActual?.nombre.toLowerCase().includes('cupcake') ?? false
   const precioBaseActual = recetaActual ? Number(recetaActual.precio_venta ?? 0) : 0
   const precioExtrasActual = extras
     .filter((e) => extrasSel.includes(e.id))
     .reduce((s, e) => s + Number(e.precio_extra), 0)
 
+  // Si es cupcake, el precio base se multiplica por la cantidad
+  const subtotalActual = esCupcake
+    ? (precioBaseActual + precioExtrasActual) * cantidadProducto
+    : precioBaseActual + precioExtrasActual
+
   const totalCarrito = carrito.reduce(
-    (s, p) => s + p.precioBase + p.precioExtras,
+    (s, p) => s + (p.precioBase + p.precioExtras) * p.cantidad,
     0
   )
 
@@ -91,6 +99,8 @@ export function FormularioPublico() {
       .filter((e) => extrasSel.includes(e.id))
       .map((e) => e.nombre)
 
+    const cantidad = esCupcake ? cantidadProducto : 1
+
     setCarrito([
       ...carrito,
       {
@@ -101,11 +111,13 @@ export function FormularioPublico() {
         notas: notasProducto.trim(),
         precioBase: precioBaseActual,
         precioExtras: precioExtrasActual,
+        cantidad,
       },
     ])
     // Limpiar para el siguiente producto
     setExtrasSel([])
     setNotasProducto('')
+    setCantidadProducto(1)
     if (recetas.length > 0) setRecetaSel(recetas[0].id)
   }
 
@@ -180,7 +192,7 @@ export function FormularioPublico() {
 
       // 2. Crear pedido
       const precioTotal = carrito.reduce(
-        (s, p) => s + p.precioBase + p.precioExtras,
+        (s, p) => s + (p.precioBase + p.precioExtras) * p.cantidad,
         0
       )
 
@@ -188,7 +200,7 @@ export function FormularioPublico() {
         .from('pedidos')
         .insert({
           cliente_id: clienteId,
-          cantidad: carrito.length,
+          cantidad: carrito.reduce((s, p) => s + p.cantidad, 0),
           precio_total: precioTotal,
           estado: 'pendiente',
           fecha_entrega: fechaEntrega,
@@ -196,7 +208,6 @@ export function FormularioPublico() {
           nombre_cliente_publico: nombre.trim(),
           whatsapp_publico: whatsapp.trim(),
           dependencia: dependencia.trim() || null,
-          // ✅ El stock se descuenta al crear el pedido desde el formulario público
           stock_descontado: true,
         })
         .select('id')
@@ -212,6 +223,7 @@ export function FormularioPublico() {
         notas: p.notas || null,
         precio_unitario: p.precioBase,
         precio_extras: p.precioExtras,
+        cantidad: p.cantidad,
       }))
 
       const { error: errProductos } = await supabase
@@ -220,16 +232,17 @@ export function FormularioPublico() {
 
       if (errProductos) throw errProductos
 
-      // 4. ✅ Descontar stock de materiales y verificar alertas
+      // 4. Descontar stock de materiales y verificar alertas
       const alertas = await descontarStockPedido(pedido.id)
 
       // 5. Notificación WhatsApp al admin con el pedido
       const productosTexto = carrito
         .map((p, i) => {
           let linea = `${i + 1}. ${p.recetaNombre}`
+          if (p.cantidad > 1) linea += ` x${p.cantidad}`
           if (p.extrasNombres.length > 0)
             linea += ` + ${p.extrasNombres.join(', ')}`
-          linea += `: ${formatCOP(p.precioBase + p.precioExtras)}`
+          linea += `: ${formatCOP((p.precioBase + p.precioExtras) * p.cantidad)}`
           if (p.notas) linea += `\n   Notas: ${p.notas}`
           return linea
         })
@@ -246,7 +259,7 @@ export function FormularioPublico() {
 
       enviarWhatsAppACallMeBot(mensaje)
 
-      // 6. ✅ Enviar alerta de stock bajo si hay materiales escasos
+      // 6. Enviar alerta de stock bajo si hay materiales escasos
       if (alertas.length > 0) {
         const mensajeAlerta =
           `⚠️ *ALERTA STOCK BAJO - Dulzuras JM*\n\n` +
@@ -291,6 +304,7 @@ export function FormularioPublico() {
             Gracias <strong>{nombre}</strong>. Te contactaremos por WhatsApp.
           </p>
           <p className="text-sm text-cream-600 mb-2">
+            {carrito.reduce((s, p) => s + p.cantidad, 0)} unidad(es) ·{' '}
             {carrito.length} producto{carrito.length > 1 ? 's' : ''} · Total:{' '}
             <strong>{formatCOP(totalCarrito)}</strong>
           </p>
@@ -305,6 +319,7 @@ export function FormularioPublico() {
               setFechaEntrega('')
               setExtrasSel([])
               setNotasProducto('')
+              setCantidadProducto(1)
             }}
             className="btn-secondary"
           >
@@ -354,17 +369,24 @@ export function FormularioPublico() {
               <div>
                 <label className="label">WhatsApp/Telefono *</label>
                 <input
-  type="tel"
-  required
-  placeholder="300 000 0000"
-  value={whatsapp}
-  onChange={(e) => {
-    const soloNumeros = e.target.value.replace(/\D/g, '').slice(0, 10)
-    setWhatsapp(soloNumeros)
-  }}
-  className="input"
-  maxLength={10}
-/>
+                  type="tel"
+                  required
+                  placeholder="300 000 0000"
+                  value={whatsapp}
+                  maxLength={10}
+                  onChange={(e) => {
+                    // Solo permite dígitos y máximo 10 caracteres
+                    const soloNumeros = e.target.value.replace(/\D/g, '').slice(0, 10)
+                    setWhatsapp(soloNumeros)
+                  }}
+                  className="input"
+                />
+                {whatsapp.length > 0 && (
+                  <p className={`text-xs mt-1 ${whatsapp.length === 10 ? 'text-green-700' : 'text-cream-500'}`}>
+                    {whatsapp.length}/10 dígitos
+                    {whatsapp.length === 10 ? ' ✓' : ''}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="label">Dependencia/Direccion</label>
@@ -425,7 +447,12 @@ export function FormularioPublico() {
                         className="flex items-start justify-between bg-cream-50 border border-cream-200 rounded-lg p-3"
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-cream-900 text-sm">{p.recetaNombre}</p>
+                          <p className="font-medium text-cream-900 text-sm">
+                            {p.recetaNombre}
+                            {p.cantidad > 1 && (
+                              <span className="ml-2 text-wine-700 font-bold">x{p.cantidad}</span>
+                            )}
+                          </p>
                           {p.extrasNombres.length > 0 && (
                             <p className="text-xs text-green-700">
                               + {p.extrasNombres.join(', ')}
@@ -435,7 +462,12 @@ export function FormularioPublico() {
                             <p className="text-xs text-cream-500 italic">"{p.notas}"</p>
                           )}
                           <p className="text-sm font-medium text-wine-700 mt-1">
-                            {formatCOP(p.precioBase + p.precioExtras)}
+                            {formatCOP((p.precioBase + p.precioExtras) * p.cantidad)}
+                            {p.cantidad > 1 && (
+                              <span className="text-xs text-cream-500 font-normal ml-1">
+                                ({formatCOP(p.precioBase + p.precioExtras)} c/u)
+                              </span>
+                            )}
                           </p>
                         </div>
                         <button
@@ -469,7 +501,10 @@ export function FormularioPublico() {
                     <label className="label text-xs">Tipo de producto</label>
                     <select
                       value={recetaSel}
-                      onChange={(e) => setRecetaSel(e.target.value)}
+                      onChange={(e) => {
+                        setRecetaSel(e.target.value)
+                        setCantidadProducto(1)
+                      }}
                       className="input text-sm"
                     >
                       {recetas.map((r) => (
@@ -480,6 +515,27 @@ export function FormularioPublico() {
                       ))}
                     </select>
                   </div>
+
+                  {/* Campo de cantidad — solo visible para cupcakes */}
+                  {esCupcake && (
+                    <div>
+                      <label className="label text-xs">¿Cuántos cupcakes deseas? *</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={200}
+                        value={cantidadProducto}
+                        onChange={(e) => {
+                          const val = Math.max(1, Math.min(200, Number(e.target.value)))
+                          setCantidadProducto(val)
+                        }}
+                        className="input text-sm"
+                      />
+                      <p className="text-xs text-cream-500 mt-1">
+                        Precio unitario: {formatCOP(precioBaseActual + precioExtrasActual)}
+                      </p>
+                    </div>
+                  )}
 
                   {extras.length > 0 && (
                     <div>
@@ -522,7 +578,12 @@ export function FormularioPublico() {
                   {precioBaseActual > 0 && (
                     <div className="text-right text-sm text-cream-700">
                       Subtotal:{' '}
-                      <strong>{formatCOP(precioBaseActual + precioExtrasActual)}</strong>
+                      <strong>{formatCOP(subtotalActual)}</strong>
+                      {esCupcake && cantidadProducto > 1 && (
+                        <span className="text-xs text-cream-500 ml-1">
+                          ({cantidadProducto} × {formatCOP(precioBaseActual + precioExtrasActual)})
+                        </span>
+                      )}
                     </div>
                   )}
 
