@@ -136,12 +136,6 @@ export function FormularioPublico() {
     setExtrasSel((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
   }
 
-  const cambiarPorciones = (valor: number) => {
-    // Siempre redondear al par más cercano hacia arriba
-    const par = redondearParArriba(Math.max(2, valor))
-    setPorcionesProducto(par)
-  }
-
   const ajustarPorciones = (delta: number) => {
     // Los botones +/- avanzan de 2 en 2
     const actual = porcionesProducto || redondearParArriba(porcionesEstandar)
