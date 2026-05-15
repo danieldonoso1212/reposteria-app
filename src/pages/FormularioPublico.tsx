@@ -354,13 +354,17 @@ export function FormularioPublico() {
               <div>
                 <label className="label">WhatsApp/Telefono *</label>
                 <input
-                  type="tel"
-                  required
-                  placeholder="300 000 0000"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
-                  className="input"
-                />
+  type="tel"
+  required
+  placeholder="300 000 0000"
+  value={whatsapp}
+  onChange={(e) => {
+    const soloNumeros = e.target.value.replace(/\D/g, '').slice(0, 10)
+    setWhatsapp(soloNumeros)
+  }}
+  className="input"
+  maxLength={10}
+/>
               </div>
               <div>
                 <label className="label">Dependencia/Direccion</label>
