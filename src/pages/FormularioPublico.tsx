@@ -14,6 +14,10 @@ interface ProductoCarrito {
   precioBase: number
   precioExtras: number
   cantidad: number
+  // Para cupcakes: unidades pedidas. Para tortas: siempre 1
+  // Para tortas con porciones personalizadas: porciones solicitadas (admin cotiza)
+  porcionesSolicitadas: number | null
+  porcionesEstandar: number | null
 }
 
 export function FormularioPublico() {
@@ -38,6 +42,7 @@ export function FormularioPublico() {
   const [extrasSel, setExtrasSel] = useState<string[]>([])
   const [notasProducto, setNotasProducto] = useState('')
   const [cantidadProducto, setCantidadProducto] = useState(1)
+  const [porcionesProducto, setPorcionesProducto] = useState<number>(0)
 
   useEffect(() => {
     cargar()
@@ -72,6 +77,8 @@ export function FormularioPublico() {
 
   const recetaActual = recetas.find((r) => r.id === recetaSel)
   const esCupcake = recetaActual?.nombre.toLowerCase().includes('cupcake') ?? false
+  const esTorta = !esCupcake // cualquier receta que no sea cupcake puede pedir porciones personalizadas
+  const porcionesEstandar = recetaActual ? Number(recetaActual.porciones ?? 0) : 0
   const precioBaseActual = recetaActual ? Number(recetaActual.precio_venta ?? 0) : 0
   const precioExtrasActual = extras
     .filter((e) => extrasSel.includes(e.id))
@@ -101,6 +108,18 @@ export function FormularioPublico() {
 
     const cantidad = esCupcake ? cantidadProducto : 1
 
+    // Para tortas: si el cliente pidió más porciones que las estándar, lo guardamos
+    const porcionesPedidas = esTorta && porcionesProducto > porcionesEstandar
+      ? porcionesProducto
+      : null
+
+    // Notas combinadas: porciones personalizadas + notas del cliente
+    let notasFinal = notasProducto.trim()
+    if (porcionesPedidas) {
+      const notaPorciones = `Porciones solicitadas: ${porcionesPedidas} (estándar: ${porcionesEstandar}) — precio a confirmar`
+      notasFinal = notasFinal ? `${notaPorciones} | ${notasFinal}` : notaPorciones
+    }
+
     setCarrito([
       ...carrito,
       {
@@ -108,16 +127,19 @@ export function FormularioPublico() {
         recetaNombre: recetaActual.nombre,
         extrasIds: [...extrasSel],
         extrasNombres,
-        notas: notasProducto.trim(),
+        notas: notasFinal,
         precioBase: precioBaseActual,
         precioExtras: precioExtrasActual,
         cantidad,
+        porcionesSolicitadas: porcionesPedidas,
+        porcionesEstandar: esTorta ? porcionesEstandar : null,
       },
     ])
     // Limpiar para el siguiente producto
     setExtrasSel([])
     setNotasProducto('')
     setCantidadProducto(1)
+    setPorcionesProducto(0)
     if (recetas.length > 0) setRecetaSel(recetas[0].id)
   }
 
@@ -383,7 +405,8 @@ export function FormularioPublico() {
                 />
                 {whatsapp.length > 0 && (
                   <p className={`text-xs mt-1 ${whatsapp.length === 10 ? 'text-green-700' : 'text-cream-500'}`}>
-                  
+                    {whatsapp.length}/10 dígitos
+                    {whatsapp.length === 10 ? ' ✓' : ''}
                   </p>
                 )}
               </div>
@@ -503,6 +526,7 @@ export function FormularioPublico() {
                       onChange={(e) => {
                         setRecetaSel(e.target.value)
                         setCantidadProducto(1)
+                        setPorcionesProducto(0)
                       }}
                       className="input text-sm"
                     >
