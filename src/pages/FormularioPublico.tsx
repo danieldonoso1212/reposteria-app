@@ -14,8 +14,6 @@ interface ProductoCarrito {
   precioBase: number
   precioExtras: number
   cantidad: number
-  // Para cupcakes: unidades pedidas. Para tortas: siempre 1
-  // Para tortas con porciones personalizadas: porciones solicitadas (admin cotiza)
   porcionesSolicitadas: number | null
   porcionesEstandar: number | null
 }
@@ -28,21 +26,23 @@ export function FormularioPublico() {
   const [enviado, setEnviado] = useState(false)
   const [error, setError] = useState('')
 
-  // Datos del cliente
   const [nombre, setNombre] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [dependencia, setDependencia] = useState('')
   const [fechaEntrega, setFechaEntrega] = useState('')
 
-  // Carrito de productos
   const [carrito, setCarrito] = useState<ProductoCarrito[]>([])
 
-  // Producto que se está armando
   const [recetaSel, setRecetaSel] = useState('')
   const [extrasSel, setExtrasSel] = useState<string[]>([])
   const [notasProducto, setNotasProducto] = useState('')
   const [cantidadProducto, setCantidadProducto] = useState(1)
   const [porcionesProducto, setPorcionesProducto] = useState<number>(0)
+
+  const [cargandoFecha, setCargandoFecha] = useState(false)
+  const [sinCupo, setSinCupo] = useState(false)
+
+  const fechaMinima = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0]
 
   useEffect(() => {
     cargar()
@@ -67,7 +67,15 @@ export function FormularioPublico() {
       const e = extRes.data ?? []
       setRecetas(r)
       setExtras(e)
-      if (r.length > 0) setRecetaSel(r[0].id)
+      if (r.length > 0) {
+        setRecetaSel(r[0].id)
+        const primera = r[0]
+        const esCupcakeInicial = primera.nombre.toLowerCase().includes('cupcake')
+        const esPersonalizadaInicial = primera.nombre.toLowerCase().includes('personaliz')
+        if (esPersonalizadaInicial && !esCupcakeInicial) {
+          setPorcionesProducto(Number(primera.porciones ?? 0))
+        }
+      }
     } catch (err) {
       console.error(err)
     } finally {
@@ -77,14 +85,25 @@ export function FormularioPublico() {
 
   const recetaActual = recetas.find((r) => r.id === recetaSel)
   const esCupcake = recetaActual?.nombre.toLowerCase().includes('cupcake') ?? false
-  const esTorta = !esCupcake // cualquier receta que no sea cupcake puede pedir porciones personalizadas
+  const esPersonalizada = !esCupcake && (recetaActual?.nombre.toLowerCase().includes('personaliz') ?? false)
   const porcionesEstandar = recetaActual ? Number(recetaActual.porciones ?? 0) : 0
-  const precioBaseActual = recetaActual ? Number(recetaActual.precio_venta ?? 0) : 0
+  const precioVentaBase = recetaActual ? Number(recetaActual.precio_venta ?? 0) : 0
+
+  // Para tortas personalizadas: precio proporcional según porciones pedidas
+  // Para cupcakes: precio unitario fijo
+  // Para tortas normales: precio fijo
+  const precioPorPorcion = esPersonalizada && porcionesEstandar > 0
+    ? precioVentaBase / porcionesEstandar
+    : 0
+
+  const precioBaseActual = esPersonalizada && porcionesProducto > 0
+    ? Math.round(precioPorPorcion * porcionesProducto)
+    : precioVentaBase
+
   const precioExtrasActual = extras
     .filter((e) => extrasSel.includes(e.id))
     .reduce((s, e) => s + Number(e.precio_extra), 0)
 
-  // Si es cupcake, el precio base se multiplica por la cantidad
   const subtotalActual = esCupcake
     ? (precioBaseActual + precioExtrasActual) * cantidadProducto
     : precioBaseActual + precioExtrasActual
@@ -100,23 +119,33 @@ export function FormularioPublico() {
     )
   }
 
+  const cambiarReceta = (id: string) => {
+    setRecetaSel(id)
+    setCantidadProducto(1)
+    setExtrasSel([])
+    setNotasProducto('')
+    const receta = recetas.find((r) => r.id === id)
+    if (!receta) return
+    const esCupcakeNueva = receta.nombre.toLowerCase().includes('cupcake')
+    const esPersonalizadaNueva = !esCupcakeNueva && receta.nombre.toLowerCase().includes('personaliz')
+    setPorcionesProducto(esPersonalizadaNueva ? Number(receta.porciones ?? 0) : 0)
+  }
+
   const agregarAlCarrito = () => {
     if (!recetaActual) return
+    if (esPersonalizada && (!porcionesProducto || porcionesProducto < 1)) {
+      alert('Indica cuántas porciones necesitas')
+      return
+    }
     const extrasNombres = extras
       .filter((e) => extrasSel.includes(e.id))
       .map((e) => e.nombre)
 
     const cantidad = esCupcake ? cantidadProducto : 1
 
-    // Para tortas: si el cliente pidió más porciones que las estándar, lo guardamos
-    const porcionesPedidas = esTorta && porcionesProducto > porcionesEstandar
-      ? porcionesProducto
-      : null
-
-    // Notas combinadas: porciones personalizadas + notas del cliente
     let notasFinal = notasProducto.trim()
-    if (porcionesPedidas) {
-      const notaPorciones = `Porciones solicitadas: ${porcionesPedidas} (estándar: ${porcionesEstandar}) — precio a confirmar`
+    if (esPersonalizada && porcionesProducto !== porcionesEstandar) {
+      const notaPorciones = `Porciones solicitadas: ${porcionesProducto} (estándar: ${porcionesEstandar})`
       notasFinal = notasFinal ? `${notaPorciones} | ${notasFinal}` : notaPorciones
     }
 
@@ -131,27 +160,26 @@ export function FormularioPublico() {
         precioBase: precioBaseActual,
         precioExtras: precioExtrasActual,
         cantidad,
-        porcionesSolicitadas: porcionesPedidas,
-        porcionesEstandar: esTorta ? porcionesEstandar : null,
+        porcionesSolicitadas: esPersonalizada ? porcionesProducto : null,
+        porcionesEstandar: esPersonalizada ? porcionesEstandar : null,
       },
     ])
-    // Limpiar para el siguiente producto
+
     setExtrasSel([])
     setNotasProducto('')
     setCantidadProducto(1)
-    setPorcionesProducto(0)
-    if (recetas.length > 0) setRecetaSel(recetas[0].id)
+    if (recetas.length > 0) {
+      const primera = recetas[0]
+      setRecetaSel(primera.id)
+      const esCupcakePrimera = primera.nombre.toLowerCase().includes('cupcake')
+      const esPersonalizadaPrimera = !esCupcakePrimera && primera.nombre.toLowerCase().includes('personaliz')
+      setPorcionesProducto(esPersonalizadaPrimera ? Number(primera.porciones ?? 0) : 0)
+    }
   }
 
   const quitarDelCarrito = (idx: number) => {
     setCarrito(carrito.filter((_, i) => i !== idx))
   }
-
-  const [cargandoFecha, setCargandoFecha] = useState(false)
-  const [sinCupo, setSinCupo] = useState(false)
-
-  // Fecha mínima: hoy + 3 días
-  const fechaMinima = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0]
 
   const verificarCupo = async (fecha: string) => {
     if (!fecha) return
@@ -176,7 +204,6 @@ export function FormularioPublico() {
     setEnviando(true)
 
     try {
-      // 0. Verificar cupo disponible para la fecha (doble chequeo al enviar)
       const { count: pedidosDia } = await supabase
         .from('pedidos')
         .select('id', { count: 'exact', head: true })
@@ -190,7 +217,6 @@ export function FormularioPublico() {
         return
       }
 
-      // 1. Crear/buscar cliente
       const { data: clienteExistente } = await supabase
         .from('clientes')
         .select('id')
@@ -212,7 +238,6 @@ export function FormularioPublico() {
         clienteId = nuevoCliente.id
       }
 
-      // 2. Crear pedido
       const precioTotal = carrito.reduce(
         (s, p) => s + (p.precioBase + p.precioExtras) * p.cantidad,
         0
@@ -237,7 +262,6 @@ export function FormularioPublico() {
 
       if (errPedido) throw errPedido
 
-      // 3. Crear productos del pedido
       const productosInsert = carrito.map((p) => ({
         pedido_id: pedido.id,
         receta_id: p.recetaId,
@@ -254,14 +278,13 @@ export function FormularioPublico() {
 
       if (errProductos) throw errProductos
 
-      // 4. Descontar stock de materiales y verificar alertas
       const alertas = await descontarStockPedido(pedido.id)
 
-      // 5. Notificación WhatsApp al admin con el pedido
       const productosTexto = carrito
         .map((p, i) => {
           let linea = `${i + 1}. ${p.recetaNombre}`
           if (p.cantidad > 1) linea += ` x${p.cantidad}`
+          if (p.porcionesSolicitadas) linea += ` (${p.porcionesSolicitadas} porciones)`
           if (p.extrasNombres.length > 0)
             linea += ` + ${p.extrasNombres.join(', ')}`
           linea += `: ${formatCOP((p.precioBase + p.precioExtras) * p.cantidad)}`
@@ -271,25 +294,24 @@ export function FormularioPublico() {
         .join('\n')
 
       const mensaje =
-        `🎂 *NUEVO PEDIDO - Dulzuras JM*\n\n` +
-        `*Cliente:* ${nombre}\n` +
-        `*WhatsApp:* ${whatsapp}\n` +
-        (dependencia ? `*Dependencia:* ${dependencia}\n` : '') +
-        `*Fecha entrega:* ${fechaEntrega}\n\n` +
-        `*Productos:*\n${productosTexto}\n\n` +
-        `*TOTAL: ${formatCOP(precioTotal)}*`
+        `NUEVO PEDIDO - Dulzuras JM\n\n` +
+        `Cliente: ${nombre}\n` +
+        `WhatsApp: ${whatsapp}\n` +
+        (dependencia ? `Dependencia: ${dependencia}\n` : '') +
+        `Fecha entrega: ${fechaEntrega}\n\n` +
+        `Productos:\n${productosTexto}\n\n` +
+        `TOTAL: ${formatCOP(precioTotal)}`
 
       enviarWhatsAppACallMeBot(mensaje)
 
-      // 6. Enviar alerta de stock bajo si hay materiales escasos
       if (alertas.length > 0) {
         const mensajeAlerta =
-          `⚠️ *ALERTA STOCK BAJO - Dulzuras JM*\n\n` +
+          `ALERTA STOCK BAJO - Dulzuras JM\n\n` +
           `Pedido de ${nombre} registrado. Materiales con stock bajo:\n\n` +
           alertas
             .map(
               (a) =>
-                `• ${a.nombre}: quedan ${a.quedaActual.toFixed(0)} ${a.unidad} (mín: ${a.stockMinimo.toFixed(0)})`
+                `- ${a.nombre}: quedan ${a.quedaActual.toFixed(0)} ${a.unidad} (min: ${a.stockMinimo.toFixed(0)})`
             )
             .join('\n') +
           `\n\nRevisa y reabastece pronto.`
@@ -342,6 +364,7 @@ export function FormularioPublico() {
               setExtrasSel([])
               setNotasProducto('')
               setCantidadProducto(1)
+              setPorcionesProducto(0)
             }}
             className="btn-secondary"
           >
@@ -377,6 +400,7 @@ export function FormularioPublico() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+
               {/* Datos del cliente */}
               <div>
                 <label className="label">Tu nombre *</label>
@@ -397,16 +421,11 @@ export function FormularioPublico() {
                   value={whatsapp}
                   maxLength={10}
                   onChange={(e) => {
-                    // Solo permite dígitos y máximo 10 caracteres
                     const soloNumeros = e.target.value.replace(/\D/g, '').slice(0, 10)
                     setWhatsapp(soloNumeros)
                   }}
                   className="input"
                 />
-                {whatsapp.length > 0 && (
-                  <p className={`text-xs mt-1 ${whatsapp.length === 10 ? 'text-green-700' : 'text-cream-500'}`}>
-                  </p>
-                )}
               </div>
               <div>
                 <label className="label">Dependencia/Direccion</label>
@@ -448,7 +467,7 @@ export function FormularioPublico() {
                 </p>
               </div>
 
-              {/* Carrito / Resumen del pedido */}
+              {/* Carrito */}
               <div className="border-t border-cream-200 pt-4">
                 <div className="flex items-center gap-2 mb-3">
                   <ShoppingCart size={18} className="text-wine-700" />
@@ -471,6 +490,11 @@ export function FormularioPublico() {
                             {p.recetaNombre}
                             {p.cantidad > 1 && (
                               <span className="ml-2 text-wine-700 font-bold">x{p.cantidad}</span>
+                            )}
+                            {p.porcionesSolicitadas && (
+                              <span className="ml-2 text-xs text-cream-500">
+                                ({p.porcionesSolicitadas} porciones)
+                              </span>
                             )}
                           </p>
                           {p.extrasNombres.length > 0 && (
@@ -521,11 +545,7 @@ export function FormularioPublico() {
                     <label className="label text-xs">Tipo de producto</label>
                     <select
                       value={recetaSel}
-                      onChange={(e) => {
-                        setRecetaSel(e.target.value)
-                        setCantidadProducto(1)
-                        setPorcionesProducto(0)
-                      }}
+                      onChange={(e) => cambiarReceta(e.target.value)}
                       className="input text-sm"
                     >
                       {recetas.map((r) => (
@@ -537,7 +557,7 @@ export function FormularioPublico() {
                     </select>
                   </div>
 
-                  {/* Campo de cantidad — solo visible para cupcakes */}
+                  {/* Cupcakes: cantidad de unidades */}
                   {esCupcake && (
                     <div>
                       <label className="label text-xs">¿Cuántos cupcakes deseas? *</label>
@@ -553,7 +573,34 @@ export function FormularioPublico() {
                         className="input text-sm"
                       />
                       <p className="text-xs text-cream-500 mt-1">
-                        Precio unitario: {formatCOP(precioBaseActual + precioExtrasActual)}
+                        Precio unitario: {formatCOP(precioVentaBase + precioExtrasActual)}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Tortas personalizadas: porciones */}
+                  {esPersonalizada && (
+                    <div>
+                      <label className="label text-xs">¿Cuántas porciones necesitas? *</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={porcionesProducto || ''}
+                        onChange={(e) => {
+                          const val = Math.max(1, Number(e.target.value))
+                          setPorcionesProducto(val)
+                        }}
+                        className="input text-sm"
+                        placeholder={`Estándar: ${porcionesEstandar}`}
+                      />
+                      <p className="text-xs text-cream-500 mt-1">
+                        Estándar: {porcionesEstandar} porciones a {formatCOP(precioVentaBase)}.
+                        {porcionesProducto > 0 && porcionesProducto !== porcionesEstandar && (
+                          <span className="text-wine-700 font-medium">
+                            {' '}Precio ajustado: {formatCOP(precioBaseActual)}
+                          </span>
+                        )}
                       </p>
                     </div>
                   )}
@@ -596,22 +643,37 @@ export function FormularioPublico() {
                     />
                   </div>
 
-                  {precioBaseActual > 0 && (
-                    <div className="text-right text-sm text-cream-700">
-                      Subtotal:{' '}
-                      <strong>{formatCOP(subtotalActual)}</strong>
-                      {esCupcake && cantidadProducto > 1 && (
-                        <span className="text-xs text-cream-500 ml-1">
-                          ({cantidadProducto} × {formatCOP(precioBaseActual + precioExtrasActual)})
-                        </span>
+                  {/* Subtotal en vivo */}
+                  {precioVentaBase > 0 && (
+                    <div className="bg-white rounded border border-cream-200 p-3">
+                      {esCupcake && (
+                        <div className="flex justify-between text-xs text-cream-600 mb-1">
+                          <span>{cantidadProducto} cupcake{cantidadProducto > 1 ? 's' : ''} × {formatCOP(precioVentaBase + precioExtrasActual)}</span>
+                        </div>
                       )}
+                      {esPersonalizada && porcionesProducto > 0 && (
+                        <div className="flex justify-between text-xs text-cream-600 mb-1">
+                          <span>{porcionesProducto} porciones × {formatCOP(Math.round(precioPorPorcion))}/porción</span>
+                        </div>
+                      )}
+                      {precioExtrasActual > 0 && (
+                        <div className="flex justify-between text-xs text-green-700 mb-1">
+                          <span>Extras</span>
+                          <span>+ {formatCOP(precioExtrasActual)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-medium text-cream-900 pt-1 border-t border-cream-100">
+                        <span>Subtotal</span>
+                        <span>{formatCOP(subtotalActual)}</span>
+                      </div>
                     </div>
                   )}
 
                   <button
                     type="button"
                     onClick={agregarAlCarrito}
-                    className="btn-secondary w-full text-sm"
+                    disabled={esPersonalizada && (!porcionesProducto || porcionesProducto < 1)}
+                    className="btn-secondary w-full text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus size={16} />
                     Agregar al pedido
