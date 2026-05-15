@@ -383,7 +383,7 @@ export function FormularioPublico() {
                 />
                 {whatsapp.length > 0 && (
                   <p className={`text-xs mt-1 ${whatsapp.length === 10 ? 'text-green-700' : 'text-cream-500'}`}>
-                    {whatsapp.length}/10 dígitos
+                  
                   </p>
                 )}
               </div>
